@@ -1,0 +1,77 @@
+
+#include <HX711.h>
+HX711 scale1; // Instance for the first load cell setup
+HX711 scale2; // Instance for the second load cell setup
+
+#include "BluetoothSerial.h"
+
+const int LOADCELL1_DOUT_PIN = 25; // DOUT pin for the first load cell setup
+const int LOADCELL1_SCK_PIN = 26;  // SCK pin for the first load cell setup
+
+const int LOADCELL2_DOUT_PIN = 32; // DOUT pin for the second load cell setup
+const int LOADCELL2_SCK_PIN = 33;  // SCK pin for the second load cell setup
+
+String device_name = "ESP32-BT-Slave";
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
+#if !defined(CONFIG_BT_SPP_ENABLED)
+#error Serial Bluetooth not available or not enabled. It is only available for the ESP32 chip.
+#endif
+
+BluetoothSerial SerialBT;
+
+void setup() {
+  Serial.begin(115200);
+  SerialBT.begin("Tynor"); // Bluetooth device name
+  Serial.printf("The device with name \"%s\" is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str());
+  //Serial.printf("The device with name \"%s\" and MAC address %s is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str(), SerialBT.getMacString()); // Use this after the MAC method is implemented
+  #ifdef USE_PIN
+    SerialBT.setPin(pin);
+    Serial.println("Using PIN");
+  #endif
+
+  scale1.begin(LOADCELL1_DOUT_PIN, LOADCELL1_SCK_PIN); // Initialize first HX711
+  scale1.set_scale(-21300);    // Calibration value for the first load cell setup
+  scale1.tare();
+
+  scale2.begin(LOADCELL2_DOUT_PIN, LOADCELL2_SCK_PIN); // Initialize second HX711
+  scale2.set_scale(-21800);    // Calibration value for the second load cell setup
+  scale2.tare();
+}
+
+void loop() {
+  // Read weight from the first load cell setup
+  float weight1 = scale1.get_units(5);
+  Serial.print("Weight 1: ");
+  Serial.print(weight1, 1);
+  Serial.print(" kg");
+
+  // Read weight from the second load cell setup
+  float weight2 = scale2.get_units(5);
+  Serial.print(", Weight 2: ");
+  Serial.print(weight2, 1);
+  Serial.println(" kg");
+ 
+  //this code is wroking correctly
+  SerialBT.print("Weight1:" + String(weight1, 1) + "kg Weight2:" + String(weight2, 1) + "kg");
+  // SerialBT.print(String(weight1, 1) + " " + String(weight2, 2));
+
+  // Power down and delay for both load cell setups
+  scale1.power_down();
+  scale2.power_down();
+  delay(2000);
+  scale1.power_up();
+  scale2.power_up();
+
+  // Check for incoming data from serial monitor and Bluetooth
+  if (Serial.available()) {
+    SerialBT.write(Serial.read());
+  }
+  if (SerialBT.available()) {
+    Serial.write(SerialBT.read());
+  }
+}
+
